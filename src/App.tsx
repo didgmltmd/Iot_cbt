@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Button from './components/Button'
 import Card from './components/Card'
 import CodeBlock from './components/CodeBlock'
@@ -17,14 +17,76 @@ const modelOptions = [
   'gpt-4o',
 ]
 
+const storageKeys = {
+  apiKey: 'iot-cbt-api-key',
+  answers: 'iot-cbt-answers',
+  results: 'iot-cbt-results',
+  lastEvaluatedAt: 'iot-cbt-last-evaluated-at',
+}
+
+function readStoredString(key: string) {
+  if (typeof window === 'undefined') return ''
+
+  try {
+    return window.localStorage.getItem(key) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+function readStoredJson<T>(key: string, fallback: T) {
+  if (typeof window === 'undefined') return fallback
+
+  try {
+    const stored = window.localStorage.getItem(key)
+    return stored ? (JSON.parse(stored) as T) : fallback
+  } catch {
+    return fallback
+  }
+}
+
+function writeStoredString(key: string, value: string) {
+  if (typeof window === 'undefined') return
+
+  try {
+    if (value) {
+      window.localStorage.setItem(key, value)
+    } else {
+      window.localStorage.removeItem(key)
+    }
+  } catch {
+    // Ignore storage errors silently.
+  }
+}
+
+function writeStoredJson(key: string, value: Record<string, unknown>) {
+  if (typeof window === 'undefined') return
+
+  try {
+    if (Object.keys(value).length > 0) {
+      window.localStorage.setItem(key, JSON.stringify(value))
+    } else {
+      window.localStorage.removeItem(key)
+    }
+  } catch {
+    // Ignore storage errors silently.
+  }
+}
+
 function App() {
-  const [apiKey, setApiKey] = useState('')
+  const [apiKey, setApiKey] = useState(() => readStoredString(storageKeys.apiKey))
   const [model, setModel] = useState('gpt-4.1-mini')
   const [started, setStarted] = useState(true)
   const [currentIndex, setCurrentIndex] = useState(0)
-  const [answers, setAnswers] = useState<AnswerMap>({})
-  const [results, setResults] = useState<ResultMap>({})
-  const [lastEvaluatedAt, setLastEvaluatedAt] = useState<DateMap>({})
+  const [answers, setAnswers] = useState<AnswerMap>(() =>
+    readStoredJson<AnswerMap>(storageKeys.answers, {}),
+  )
+  const [results, setResults] = useState<ResultMap>(() =>
+    readStoredJson<ResultMap>(storageKeys.results, {}),
+  )
+  const [lastEvaluatedAt, setLastEvaluatedAt] = useState<DateMap>(() =>
+    readStoredJson<DateMap>(storageKeys.lastEvaluatedAt, {}),
+  )
   const [hint, setHint] = useState('')
   const [showAnswer, setShowAnswer] = useState(false)
   const [showApiSettings, setShowApiSettings] = useState(false)
@@ -41,6 +103,22 @@ function App() {
     if (values.length === 0) return 0
     return Math.round(values.reduce((sum, item) => sum + item.score, 0) / values.length)
   }, [results])
+
+  useEffect(() => {
+    writeStoredString(storageKeys.apiKey, apiKey)
+  }, [apiKey])
+
+  useEffect(() => {
+    writeStoredJson(storageKeys.answers, answers)
+  }, [answers])
+
+  useEffect(() => {
+    writeStoredJson(storageKeys.results, results)
+  }, [results])
+
+  useEffect(() => {
+    writeStoredJson(storageKeys.lastEvaluatedAt, lastEvaluatedAt)
+  }, [lastEvaluatedAt])
 
   const handleGrade = async () => {
     if (!apiKey.trim()) {
